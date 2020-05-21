@@ -14,8 +14,8 @@ func Test_openFile(t *testing.T) {
 		log.Fatal("failed to get current directory")
 	}
 
-	torrent := BeeTorrent{}
-	torrent.parse()
+	//torrent := BeeTorrent{}
+	//torrent.parse()
 
 	//torrent := Open(currDir + "/resources/debian-iso.torrent")
 

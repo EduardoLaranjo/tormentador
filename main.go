@@ -15,7 +15,8 @@ func main() {
 
 	beeTorrent := Open(currDir + "/resources/debian-iso.torrent")
 
-	newTorrent := NewTorrent(beeTorrent)
+	torrent := NewTorrent(beeTorrent)
 
-	newTorrent.query()
+	torrent.Download()
+
 }

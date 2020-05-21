@@ -48,6 +48,6 @@ func (b *BeeTorrent) infoHash() [20]byte {
 		log.Fatal(err)
 	}
 
-	sum := sha1.Sum(buffer.Bytes())
-	return sum
+	return sha1.Sum(buffer.Bytes())
+
 }
