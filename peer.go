@@ -77,6 +77,12 @@ func (p *Peer) String() string {
 
 func (p *Peer) work(pieces <-chan RequestPiece, resultPieces chan ResultPiece) {
 
+	defer func() {
+		if r := recover(); r != nil {
+			log.Println("### Recovered", r)
+		}
+	}()
+
 	if p.conn == nil {
 		log.Panic("peer not connected")
 	}
@@ -84,48 +90,56 @@ func (p *Peer) work(pieces <-chan RequestPiece, resultPieces chan ResultPiece) {
 	p.write(NewInterested())
 	p.write(NewUnchoked())
 
+	// unchocked
+	p.read()
+
 	for piece := range pieces {
 
-		pieceData := make([]byte, piece.length)
+		numBytesDownloaded := 0
 
-		received := 0
+		pieceResult := make([]byte, piece.length, piece.length)
 
-		for received < piece.length {
+		for numBytesDownloaded < piece.length {
 
-			var length int
+			log.Printf("downloaded %d bytes for piece %d", numBytesDownloaded, piece.id)
 
-			if (piece.length - received) > 16384 {
-				length = 16_384
-			} else {
-				length = piece.length - received
-			}
+			length := calculateLength(piece, numBytesDownloaded)
 
-			log.Printf("request for piece %d with length %d\n", piece.id, length)
+			log.Print("length calculated ", length)
 
-			p.write(NewRequest(piece.id, received, length))
+			p.write(NewRequest(piece.id, numBytesDownloaded, length))
 
 			pieceMessage := p.read()
 
 			if pieceMessage.Code() == 7 {
-				index := binary.BigEndian.Uint32(pieceMessage.Payload()[0:4])
-				begin := binary.BigEndian.Uint32(pieceMessage.Payload()[4:8])
+				//index := binary.BigEndian.Uint32(pieceMessage.Payload()[0:4])
+				offset := binary.BigEndian.Uint32(pieceMessage.Payload()[4:8])
 				data := pieceMessage.Payload()[8:]
 
-				log.Printf("got piece from %d with offset %d\n", index, begin)
-
-				if begin >= uint32(received) {
-					copy(pieceData[begin:], data)
-					received = received + pieceMessage.PayloadLength()
-				}
+				copy(pieceResult[offset:], data)
+				numBytesDownloaded += len(data)
 			}
 
 		}
 
+		log.Printf("downloaded %d bytes for piece %d", numBytesDownloaded, piece.id)
+
 		log.Printf("piece %d completed", piece.id)
 
-		resultPieces <- ResultPiece{id: piece.id, data: pieceData}
+		resultPieces <- ResultPiece{id: piece.id, data: pieceResult[:]}
 
 	}
+}
+
+func calculateLength(piece RequestPiece, received int) int {
+	left := piece.length - received
+
+	if left < 16384 {
+		return left
+	}
+
+	return 16384
+
 }
 
 func (p *Peer) write(message Message) {
@@ -138,7 +152,7 @@ func (p *Peer) write(message Message) {
 
 	copy(fullMessage[4:], marshallMessage)
 
-	log.Printf("sending message %d to peer %s", message.Code(), p)
+	//log.Printf("sending message %d to peer %s", message.Code(), p)
 
 	_, _ = p.conn.Write(fullMessage)
 
@@ -146,19 +160,23 @@ func (p *Peer) write(message Message) {
 
 func (p *Peer) read() Message {
 
-	messageLength := make([]byte, 4)
+	buf := make([]byte, 4)
 
-	for binary.BigEndian.Uint32(messageLength) == 0 { // keep alives
-		_, _ = p.conn.Read(messageLength)
+	_, _ = p.conn.Read(buf)
+	nextMessageSize := binary.BigEndian.Uint32(buf)
+
+	if nextMessageSize == 0 { // 0 is keep alive read again
+		_, _ = p.conn.Read(buf)
+		nextMessageSize = binary.BigEndian.Uint32(buf)
 	}
 
-	unParsedMessage := make([]byte, binary.BigEndian.Uint32(messageLength), binary.BigEndian.Uint32(messageLength))
+	unParsedMessage := make([]byte, nextMessageSize, nextMessageSize)
 
 	_, _ = p.conn.Read(unParsedMessage)
 
 	message := Parse(unParsedMessage)
 
-	log.Printf("receive message %d from peer %s", message.Code(), p)
+	//log.Printf("receive message %d from peer %s", message.Code(), p)
 
 	return message
 }

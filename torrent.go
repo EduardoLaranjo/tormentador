@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"crypto/sha1"
 	"encoding/binary"
@@ -83,39 +82,28 @@ func (t *Torrent) Download() {
 		requestChannel <- RequestPiece{index, t.pieceLength, hash}
 	}
 
-	_, err := os.Stat("file.iso")
-
-	if os.IsExist(err) {
-		os.Remove("file.iso")
-	}
-
-	file, err := os.OpenFile("file.iso", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-
-	buffer := bufio.NewWriter(file)
-
-	if err != nil {
-		log.Fatal(err)
-	}
+	//file, err := os.OpenFile("file.iso", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	//
+	//buffer := bufio.NewWriter(file)
+	//
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
 
 	for i := 0; i < len(t.pieces); i++ {
 
 		piece := <-resultPieces
-
 		resultHash := sha1.Sum(piece.data)
 		isEqual := bytes.Equal(resultHash[:], t.pieces[piece.id])
 
 		if !isEqual {
-			//fmt//SA.Printf("%x\n", piece.data)
-			//log.Fatal("integrity failed")
+			log.Printf("integrity failed for piece %d\n", piece.id)
 		}
-
-		log.Println("append new piece completed")
-
-		_, err := buffer.Write(piece.data)
-
-		if err != nil {
-			log.Fatal(err)
-		}
+		file, _ := os.OpenFile("debian.iso", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		log.Print("order of results ", piece.id)
+		_, _ = file.Write(piece.data)
+		//os.Exit(-1)
+		//}
 	}
 
 	close(requestChannel)
